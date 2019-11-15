@@ -1,0 +1,1000 @@
+# Natural Language Toolkit: Some texts for exploration in chapter 1 of the book
+#
+# Copyright (C) 2001-2017 NLTK Project
+# Author: Steven Bird <stevenbird1@gmail.com>
+#
+# URL: <http://nltk.org/>
+# For license information, see LICENSE.TXT
+from __future__ import print_function
+
+from nltk.corpus import (gutenberg, genesis, inaugural,
+                         nps_chat, webtext, treebank, wordnet)
+from nltk.text import Text
+from nltk.probability import FreqDist
+
+print("*** Introductory Examples for the NLTK Book ***")
+print("Loading text1, ..., text9 and sent1, ..., sent9")
+print("Type the name of the text or sentence to view it.")
+print("Type: 'texts()' or 'sents()' to list the materials.")
+
+text1 = Text(gutenberg.words('melville-moby_dick.txt'))
+print("text1:", text1.name)
+
+text2 = Text(gutenberg.words('austen-sense.txt'))
+print("text2:", text2.name)
+
+text3 = Text(genesis.words('english-kjv.txt'), name="The Book of Genesis")
+print("text3:", text3.name)
+
+text4 = Text(inaugural.words(), name="Inaugural Address Corpus")
+print("text4:", text4.name)
+
+text5 = Text(nps_chat.words(), name="Chat Corpus")
+print("text5:", text5.name)
+
+text6 = Text(webtext.words('grail.txt'),
+             name="Monty Python and the Holy Grail")
+print("text6:", text6.name)
+
+text7 = Text(treebank.words(), name="Wall Street Journal")
+print("text7:", text7.name)
+
+text8 = Text(webtext.words('singles.txt'), name="Personals Corpus")
+print("text8:", text8.name)
+
+text9 = Text(gutenberg.words('chesterton-thursday.txt'))
+print("text9:", text9.name)
+
+
+def texts():
+    print("text1:", text1.name)
+    print("text2:", text2.name)
+    print("text3:", text3.name)
+    print("text4:", text4.name)
+    print("text5:", text5.name)
+    print("text6:", text6.name)
+    print("text7:", text7.name)
+    print("text8:", text8.name)
+    print("text9:", text9.name)
+
+sent1 = ["Call", "me", "Ishmael", "."]
+sent2 = ["The", "family", "of", "Dashwood", "had", "long",
+         "been", "settled", "in", "Sussex", "."]
+sent3 = ["In", "the", "beginning", "God", "created", "the",
+         "heaven", "and", "the", "earth", "."]
+sent4 = ["Fellow", "-", "Citizens", "of", "the", "Senate",
+         "and", "of", "the", "House", "of", "Representatives", ":"]
+sent5 = ["I", "have", "a", "problem", "with", "people",
+         "PMing", "me", "to", "lol", "JOIN"]
+sent6 = ['SCENE', '1', ':', '[', 'wind', ']', '[', 'clop', 'clop',
+         'clop', ']', 'KING', 'ARTHUR', ':', 'Whoa', 'there', '!']
+sent7 = ["Pierre", "Vinken", ",", "61", "years", "old", ",",
+         "will", "join", "the", "board", "as", "a", "nonexecutive",
+         "director", "Nov.", "29", "."]
+sent8 = ['25', 'SEXY', 'MALE', ',', 'seeks', 'attrac', 'older',
+         'single', 'lady', ',', 'for', 'discreet', 'encounters', '.']
+sent9 = ["THE", "suburb", "of", "Saffron", "Park", "lay", "on", "the",
+         "sunset", "side", "of", "London", ",", "as", "red", "and",
+         "ragged", "as", "a", "cloud", "of", "sunset", "."]
+
+
+def sents():
+    print("sent1:", " ".join(sent1))
+    print("sent2:", " ".join(sent2))
+    print("sent3:", " ".join(sent3))
+    print("sent4:", " ".join(sent4))
+    print("sent5:", " ".join(sent5))
+    print("sent6:", " ".join(sent6))
+    print("sent7:", " ".join(sent7))
+    print("sent8:", " ".join(sent8))
+    print("sent9:", " ".join(sent9))
+# Natural Language Toolkit: Collections
+#
+# Copyright (C) 2001-2017 NLTK Project
+# Author: Steven Bird <stevenbird1@gmail.com>
+# URL: <http://nltk.org/>
+# For license information, see LICENSE.TXT
+from __future__ import print_function, absolute_import
+
+import locale
+import re
+import types
+import textwrap
+import pydoc
+import bisect
+import os
+from itertools import islice, chain, combinations
+from functools import total_ordering
+from collections import defaultdict, deque, Counter
+
+from six import text_type
+
+from nltk.internals import slice_bounds, raise_unorderable_types
+from nltk.compat import python_2_unicode_compatible
+
+
+##########################################################################
+# Ordered Dictionary
+##########################################################################
+
+class OrderedDict(dict):
+    def __init__(self, data=None, **kwargs):
+        self._keys = self.keys(data, kwargs.get('keys'))
+        self._default_factory = kwargs.get('default_factory')
+        if data is None:
+            dict.__init__(self)
+        else:
+            dict.__init__(self, data)
+
+    def __delitem__(self, key):
+        dict.__delitem__(self, key)
+        self._keys.remove(key)
+
+    def __getitem__(self, key):
+        try:
+            return dict.__getitem__(self, key)
+        except KeyError:
+            return self.__missing__(key)
+
+    def __iter__(self):
+        return (key for key in self.keys())
+
+    def __missing__(self, key):
+        if not self._default_factory and key not in self._keys:
+            raise KeyError()
+        return self._default_factory()
+
+    def __setitem__(self, key, item):
+        dict.__setitem__(self, key, item)
+        if key not in self._keys:
+            self._keys.append(key)
+
+    def clear(self):
+        dict.clear(self)
+        self._keys.clear()
+
+    def copy(self):
+        d = dict.copy(self)
+        d._keys = self._keys
+        return d
+
+    def items(self):
+        # returns iterator under python 3 and list under python 2
+        return zip(self.keys(), self.values())
+
+    def keys(self, data=None, keys=None):
+        if data:
+            if keys:
+                assert isinstance(keys, list)
+                assert len(data) == len(keys)
+                return keys
+            else:
+                assert isinstance(data, dict) or \
+                       isinstance(data, OrderedDict) or \
+                       isinstance(data, list)
+                if isinstance(data, dict) or isinstance(data, OrderedDict):
+                    return data.keys()
+                elif isinstance(data, list):
+                    return [key for (key, value) in data]
+        elif '_keys' in self.__dict__:
+            return self._keys
+        else:
+            return []
+
+    def popitem(self):
+        if not self._keys:
+            raise KeyError()
+
+        key = self._keys.pop()
+        value = self[key]
+        del self[key]
+        return (key, value)
+
+    def setdefault(self, key, failobj=None):
+        dict.setdefault(self, key, failobj)
+        if key not in self._keys:
+            self._keys.append(key)
+
+    def update(self, data):
+        dict.update(self, data)
+        for key in self.keys(data):
+            if key not in self._keys:
+                self._keys.append(key)
+
+    def values(self):
+        # returns iterator under python 3
+        return map(self.get, self._keys)
+
+######################################################################
+# Lazy Sequences
+######################################################################
+
+@total_ordering
+@python_2_unicode_compatible
+class AbstractLazySequence(object):
+    """
+    An abstract base class for read-only sequences whose values are
+    computed as needed.  Lazy sequences act like tuples -- they can be
+    indexed, sliced, and iterated over; but they may not be modified.
+
+    The most common application of lazy sequences in NLTK is for
+    corpus view objects, which provide access to the contents of a
+    corpus without loading the entire corpus into memory, by loading
+    pieces of the corpus from disk as needed.
+
+    The result of modifying a mutable element of a lazy sequence is
+    undefined.  In particular, the modifications made to the element
+    may or may not persist, depending on whether and when the lazy
+    sequence caches that element's value or reconstructs it from
+    scratch.
+
+    Subclasses are required to define two methods: ``__len__()``
+    and ``iterate_from()``.
+    """
+    def __len__(self):
+        """
+        Return the number of tokens in the corpus file underlying this
+        corpus view.
+        """
+        raise NotImplementedError('should be implemented by subclass')
+
+    def iterate_from(self, start):
+        """
+        Return an iterator that generates the tokens in the corpus
+        file underlying this corpus view, starting at the token number
+        ``start``.  If ``start>=len(self)``, then this iterator will
+        generate no tokens.
+        """
+        raise NotImplementedError('should be implemented by subclass')
+
+    def __getitem__(self, i):
+        """
+        Return the *i* th token in the corpus file underlying this
+        corpus view.  Negative indices and spans are both supported.
+        """
+        if isinstance(i, slice):
+            start, stop = slice_bounds(self, i)
+            return LazySubsequence(self, start, stop)
+        else:
+            # Handle negative indices
+            if i < 0: i += len(self)
+            if i < 0: raise IndexError('index out of range')
+            # Use iterate_from to extract it.
+            try:
+                return next(self.iterate_from(i))
+            except StopIteration:
+                raise IndexError('index out of range')
+
+    def __iter__(self):
+        """Return an iterator that generates the tokens in the corpus
+        file underlying this corpus view."""
+        return self.iterate_from(0)
+
+    def count(self, value):
+        """Return the number of times this list contains ``value``."""
+        return sum(1 for elt in self if elt==value)
+
+    def index(self, value, start=None, stop=None):
+        """Return the index of the first occurrence of ``value`` in this
+        list that is greater than or equal to ``start`` and less than
+        ``stop``.  Negative start and stop values are treated like negative
+        slice bounds -- i.e., they count from the end of the list."""
+        start, stop = slice_bounds(self, slice(start, stop))
+        for i, elt in enumerate(islice(self, start, stop)):
+            if elt == value: return i+start
+        raise ValueError('index(x): x not in list')
+
+    def __contains__(self, value):
+        """Return true if this list contains ``value``."""
+        return bool(self.count(value))
+
+    def __add__(self, other):
+        """Return a list concatenating self with other."""
+        return LazyConcatenation([self, other])
+
+    def __radd__(self, other):
+        """Return a list concatenating other with self."""
+        return LazyConcatenation([other, self])
+
+    def __mul__(self, count):
+        """Return a list concatenating self with itself ``count`` times."""
+        return LazyConcatenation([self] * count)
+
+    def __rmul__(self, count):
+        """Return a list concatenating self with itself ``count`` times."""
+        return LazyConcatenation([self] * count)
+
+    _MAX_REPR_SIZE = 60
+    def __repr__(self):
+        """
+        Return a string representation for this corpus view that is
+        similar to a list's representation; but if it would be more
+        than 60 characters long, it is truncated.
+        """
+        pieces = []
+        length = 5
+        for elt in self:
+            pieces.append(repr(elt))
+            length += len(pieces[-1]) + 2
+            if length > self._MAX_REPR_SIZE and len(pieces) > 2:
+                return '[%s, ...]' % text_type(', ').join(pieces[:-1])
+        else:
+            return '[%s]' % text_type(', ').join(pieces)
+
+    def __eq__(self, other):
+        return (type(self) == type(other) and list(self) == list(other))
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __lt__(self, other):
+        if type(other) != type(self):
+            raise_unorderable_types("<", self, other)
+        return list(self) < list(other)
+
+    def __hash__(self):
+        """
+        :raise ValueError: Corpus view objects are unhashable.
+        """
+        raise ValueError('%s objects are unhashable' %
+                         self.__class__.__name__)
+
+
+class LazySubsequence(AbstractLazySequence):
+    """
+    A subsequence produced by slicing a lazy sequence.  This slice
+    keeps a reference to its source sequence, and generates its values
+    by looking them up in the source sequence.
+    """
+
+    MIN_SIZE = 100
+    """
+    The minimum size for which lazy slices should be created.  If
+    ``LazySubsequence()`` is called with a subsequence that is
+    shorter than ``MIN_SIZE``, then a tuple will be returned instead.
+    """
+
+    def __new__(cls, source, start, stop):
+        """
+        Construct a new slice from a given underlying sequence.  The
+        ``start`` and ``stop`` indices should be absolute indices --
+        i.e., they should not be negative (for indexing from the back
+        of a list) or greater than the length of ``source``.
+        """
+        # If the slice is small enough, just use a tuple.
+        if stop-start < cls.MIN_SIZE:
+            return list(islice(source.iterate_from(start), stop-start))
+        else:
+            return object.__new__(cls)
+
+    def __init__(self, source, start, stop):
+        self._source = source
+        self._start = start
+        self._stop = stop
+
+    def __len__(self):
+        return self._stop - self._start
+
+    def iterate_from(self, start):
+        return islice(self._source.iterate_from(start+self._start),
+                      max(0, len(self)-start))
+
+
+class LazyConcatenation(AbstractLazySequence):
+    """
+    A lazy sequence formed by concatenating a list of lists.  This
+    underlying list of lists may itself be lazy.  ``LazyConcatenation``
+    maintains an index that it uses to keep track of the relationship
+    between offsets in the concatenated lists and offsets in the
+    sublists.
+    """
+    def __init__(self, list_of_lists):
+        self._list = list_of_lists
+        self._offsets = [0]
+
+    def __len__(self):
+        if len(self._offsets) <= len(self._list):
+            for tok in self.iterate_from(self._offsets[-1]): pass
+        return self._offsets[-1]
+
+    def iterate_from(self, start_index):
+        if start_index < self._offsets[-1]:
+            sublist_index = bisect.bisect_right(self._offsets, start_index)-1
+        else:
+            sublist_index = len(self._offsets)-1
+
+        index = self._offsets[sublist_index]
+
+        # Construct an iterator over the sublists.
+        if isinstance(self._list, AbstractLazySequence):
+            sublist_iter = self._list.iterate_from(sublist_index)
+        else:
+            sublist_iter = islice(self._list, sublist_index, None)
+
+        for sublist in sublist_iter:
+            if sublist_index == (len(self._offsets)-1):
+                assert index+len(sublist) >= self._offsets[-1], (
+                        'offests not monotonic increasing!')
+                self._offsets.append(index+len(sublist))
+            else:
+                assert self._offsets[sublist_index+1] == index+len(sublist), (
+                        'inconsistent list value (num elts)')
+
+            for value in sublist[max(0, start_index-index):]:
+                yield value
+
+            index += len(sublist)
+            sublist_index += 1
+
+
+class LazyMap(AbstractLazySequence):
+    """
+    A lazy sequence whose elements are formed by applying a given
+    function to each element in one or more underlying lists.  The
+    function is applied lazily -- i.e., when you read a value from the
+    list, ``LazyMap`` will calculate that value by applying its
+    function to the underlying lists' value(s).  ``LazyMap`` is
+    essentially a lazy version of the Python primitive function
+    ``map``.  In particular, the following two expressions are
+    equivalent:
+
+        >>> from nltk.collections import LazyMap
+        >>> function = str
+        >>> sequence = [1,2,3]
+        >>> map(function, sequence) # doctest: +SKIP
+        ['1', '2', '3']
+        >>> list(LazyMap(function, sequence))
+        ['1', '2', '3']
+
+    Like the Python ``map`` primitive, if the source lists do not have
+    equal size, then the value None will be supplied for the
+    'missing' elements.
+
+    Lazy maps can be useful for conserving memory, in cases where
+    individual values take up a lot of space.  This is especially true
+    if the underlying list's values are constructed lazily, as is the
+    case with many corpus readers.
+
+    A typical example of a use case for this class is performing
+    feature detection on the tokens in a corpus.  Since featuresets
+    are encoded as dictionaries, which can take up a lot of memory,
+    using a ``LazyMap`` can significantly reduce memory usage when
+    training and running classifiers.
+    """
+    def __init__(self, function, *lists, **config):
+        """
+        :param function: The function that should be applied to
+            elements of ``lists``.  It should take as many arguments
+            as there are ``lists``.
+        :param lists: The underlying lists.
+        :param cache_size: Determines the size of the cache used
+            by this lazy map.  (default=5)
+        """
+        if not lists:
+            raise TypeError('LazyMap requires at least two args')
+
+        self._lists = lists
+        self._func = function
+        self._cache_size = config.get('cache_size', 5)
+        self._cache = ({} if self._cache_size > 0 else None)
+
+        # If you just take bool() of sum() here _all_lazy will be true just
+        # in case n >= 1 list is an AbstractLazySequence.  Presumably this
+        # isn't what's intended.
+        self._all_lazy = sum(isinstance(lst, AbstractLazySequence)
+                             for lst in lists) == len(lists)
+
+    def iterate_from(self, index):
+        # Special case: one lazy sublist
+        if len(self._lists) == 1 and self._all_lazy:
+            for value in self._lists[0].iterate_from(index):
+                yield self._func(value)
+            return
+
+        # Special case: one non-lazy sublist
+        elif len(self._lists) == 1:
+            while True:
+                try: yield self._func(self._lists[0][index])
+                except IndexError: return
+                index += 1
+
+        # Special case: n lazy sublists
+        elif self._all_lazy:
+            iterators = [lst.iterate_from(index) for lst in self._lists]
+            while True:
+                elements = []
+                for iterator in iterators:
+                    try: elements.append(next(iterator))
+                    except: elements.append(None)
+                if elements == [None] * len(self._lists):
+                    return
+                yield self._func(*elements)
+                index += 1
+
+        # general case
+        else:
+            while True:
+                try: elements = [lst[index] for lst in self._lists]
+                except IndexError:
+                    elements = [None] * len(self._lists)
+                    for i, lst in enumerate(self._lists):
+                        try: elements[i] = lst[index]
+                        except IndexError: pass
+                    if elements == [None] * len(self._lists):
+                        return
+                yield self._func(*elements)
+                index += 1
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            sliced_lists = [lst[index] for lst in self._lists]
+            return LazyMap(self._func, *sliced_lists)
+        else:
+            # Handle negative indices
+            if index < 0: index += len(self)
+            if index < 0: raise IndexError('index out of range')
+            # Check the cache
+            if self._cache is not None and index in self._cache:
+                return self._cache[index]
+            # Calculate the value
+            try: val = next(self.iterate_from(index))
+            except StopIteration:
+                raise IndexError('index out of range')
+            # Update the cache
+            if self._cache is not None:
+                if len(self._cache) > self._cache_size:
+                    self._cache.popitem() # discard random entry
+                self._cache[index] = val
+            # Return the value
+            return val
+
+    def __len__(self):
+        return max(len(lst) for lst in self._lists)
+
+
+class LazyZip(LazyMap):
+    """
+    A lazy sequence whose elements are tuples, each containing the i-th
+    element from each of the argument sequences.  The returned list is
+    truncated in length to the length of the shortest argument sequence. The
+    tuples are constructed lazily -- i.e., when you read a value from the
+    list, ``LazyZip`` will calculate that value by forming a tuple from
+    the i-th element of each of the argument sequences.
+
+    ``LazyZip`` is essentially a lazy version of the Python primitive function
+    ``zip``.  In particular, an evaluated LazyZip is equivalent to a zip:
+
+        >>> from nltk.collections import LazyZip
+        >>> sequence1, sequence2 = [1, 2, 3], ['a', 'b', 'c']
+        >>> zip(sequence1, sequence2) # doctest: +SKIP
+        [(1, 'a'), (2, 'b'), (3, 'c')]
+        >>> list(LazyZip(sequence1, sequence2))
+        [(1, 'a'), (2, 'b'), (3, 'c')]
+        >>> sequences = [sequence1, sequence2, [6,7,8,9]]
+        >>> list(zip(*sequences)) == list(LazyZip(*sequences))
+        True
+
+    Lazy zips can be useful for conserving memory in cases where the argument
+    sequences are particularly long.
+
+    A typical example of a use case for this class is combining long sequences
+    of gold standard and predicted values in a classification or tagging task
+    in order to calculate accuracy.  By constructing tuples lazily and
+    avoiding the creation of an additional long sequence, memory usage can be
+    significantly reduced.
+    """
+    def __init__(self, *lists):
+        """
+        :param lists: the underlying lists
+        :type lists: list(list)
+        """
+        LazyMap.__init__(self, lambda *elts: elts, *lists)
+
+    def iterate_from(self, index):
+        iterator = LazyMap.iterate_from(self, index)
+        while index < len(self):
+            yield next(iterator)
+            index += 1
+        return
+
+    def __len__(self):
+        return min(len(lst) for lst in self._lists)
+
+
+class LazyEnumerate(LazyZip):
+    """
+    A lazy sequence whose elements are tuples, each ontaining a count (from
+    zero) and a value yielded by underlying sequence.  ``LazyEnumerate`` is
+    useful for obtaining an indexed list. The tuples are constructed lazily
+    -- i.e., when you read a value from the list, ``LazyEnumerate`` will
+    calculate that value by forming a tuple from the count of the i-th
+    element and the i-th element of the underlying sequence.
+
+    ``LazyEnumerate`` is essentially a lazy version of the Python primitive
+    function ``enumerate``.  In particular, the following two expressions are
+    equivalent:
+
+        >>> from nltk.collections import LazyEnumerate
+        >>> sequence = ['first', 'second', 'third']
+        >>> list(enumerate(sequence))
+        [(0, 'first'), (1, 'second'), (2, 'third')]
+        >>> list(LazyEnumerate(sequence))
+        [(0, 'first'), (1, 'second'), (2, 'third')]
+
+    Lazy enumerations can be useful for conserving memory in cases where the
+    argument sequences are particularly long.
+
+    A typical example of a use case for this class is obtaining an indexed
+    list for a long sequence of values.  By constructing tuples lazily and
+    avoiding the creation of an additional long sequence, memory usage can be
+    significantly reduced.
+    """
+
+    def __init__(self, lst):
+        """
+        :param lst: the underlying list
+        :type lst: list
+        """
+        LazyZip.__init__(self, range(len(lst)), lst)
+
+class LazyIteratorList(AbstractLazySequence):
+    """
+    Wraps an iterator, loading its elements on demand
+    and making them subscriptable.
+    __repr__ displays only the first few elements.
+    """
+    def __init__(self, it, known_len=None):
+        self._it = it
+        self._len = known_len
+        self._cache = []
+
+    def __len__(self):
+        if self._len:
+            return self._len
+        for x in self.iterate_from(len(self._cache)):
+            pass
+        self._len = len(self._cache)
+        return self._len
+
+    def iterate_from(self, start):
+        """Create a new iterator over this list starting at the given offset."""
+        while len(self._cache)<start:
+            v = next(self._it)
+            self._cache.append(v)
+        i = start
+        while i<len(self._cache):
+            yield self._cache[i]
+            i += 1
+        while True:
+            v = next(self._it)
+            self._cache.append(v)
+            yield v
+            i += 1
+
+    def __add__(self, other):
+        """Return a list concatenating self with other."""
+        return type(self)(chain(self, other))
+
+    def __radd__(self, other):
+        """Return a list concatenating other with self."""
+        return type(self)(chain(other, self))
+
+######################################################################
+# Trie Implementation
+######################################################################
+class Trie(defaultdict):
+    """A Trie implementation for strings"""
+    LEAF = True
+
+    def __init__(self, strings=None):
+        """Builds a Trie object, which is built around a ``defaultdict``
+
+        If ``strings`` is provided, it will add the ``strings``, which
+        consist of a ``list`` of ``strings``, to the Trie.
+        Otherwise, it'll construct an empty Trie.
+
+        :param strings: List of strings to insert into the trie
+            (Default is ``None``)
+        :type strings: list(str)
+
+        """
+        defaultdict.__init__(self, Trie)
+        if strings:
+            for string in strings:
+                self.insert(string)
+
+    def insert(self, string):
+        """Inserts ``string`` into the Trie
+
+        :param string: String to insert into the trie
+        :type string: str
+
+        :Example:
+
+        >>> from nltk.collections import Trie
+        >>> trie = Trie(["ab"])
+        >>> trie
+        defaultdict(<class 'nltk.collections.Trie'>, {'a': defaultdict(<class 'nltk.collections.Trie'>, {'b': defaultdict(<class 'nltk.collections.Trie'>, {True: None})})})
+
+        """
+        if len(string):
+            self[string[0]].insert(string[1:])
+        else:
+            # mark the string is complete
+            self[Trie.LEAF] = None
+
+    def __str__(self):
+        return str(self.as_dict())
+
+    def as_dict(self, d=None):
+        """Convert ``defaultdict`` to common ``dict`` representation.
+
+        :param: A defaultdict containing strings mapped to nested defaultdicts.
+            This is the structure of the trie. (Default is None)
+        :type: defaultdict(str -> defaultdict)
+        :return: Even though ``defaultdict`` is a subclass of ``dict`` and thus
+            can be converted to a simple ``dict`` using ``dict()``, in our case
+            it's a nested ``defaultdict``, so here's a quick trick to provide to
+            us the ``dict`` representation of the ``Trie`` without
+            ``defaultdict(<class 'nltk.collections.Trie'>, ...``
+        :rtype: dict(str -> dict(bool -> None))
+            Note: there can be an arbitrarily deeply nested
+            ``dict(str -> dict(str -> dict(..))``, but the last
+            level will have ``dict(str -> dict(bool -> None))``
+
+        :Example:
+
+        >>> from nltk.collections import Trie
+        >>> trie = Trie(["abc", "def"])
+        >>> expected = {'a': {'b': {'c': {True: None}}}, 'd': {'e': {'f': {True: None}}}}
+        >>> trie.as_dict() == expected
+        True
+
+        """
+        def _default_to_regular(d):
+            """
+            Source: http://stackoverflow.com/a/26496899/4760801
+
+            :param d: Nested ``defaultdict`` to convert to regular ``dict``
+            :type d: defaultdict(str -> defaultdict(...))
+            :return: A dict representation of the defaultdict
+            :rtype: dict(str -> dict(str -> ...))
+
+            :Example:
+
+            >>> from collections import defaultdict
+            >>> d = defaultdict(defaultdict)
+            >>> d["one"]["two"] = "three"
+            >>> d
+            defaultdict(<type 'collections.defaultdict'>, {'one': defaultdict(None, {'two': 'three'})})
+            >>> _default_to_regular(d)
+            {'one': {'two': 'three'}}
+
+            """
+            if isinstance(d, defaultdict):
+                d = {k: _default_to_regular(v) for k, v in d.items()}
+            return d
+
+        return _default_to_regular(self)
+# Natural Language Toolkit: Collocations and Association Measures
+#
+# Copyright (C) 2001-2017 NLTK Project
+# Author: Joel Nothman <jnothman@student.usyd.edu.au>
+# URL: <http://nltk.org>
+# For license information, see LICENSE.TXT
+#
+"""
+Tools to identify collocations --- words that often appear consecutively
+--- within corpora. They may also be used to find other associations between
+word occurrences.
+See Manning and Schutze ch. 5 at http://nlp.stanford.edu/fsnlp/promo/colloc.pdf
+and the Text::NSP Perl package at http://ngram.sourceforge.net
+
+Finding collocations requires first calculating the frequencies of words and
+their appearance in the context of other words. Often the collection of words
+will then requiring filtering to only retain useful content terms. Each ngram
+of words may then be scored according to some association measure, in order
+to determine the relative likelihood of each ngram being a collocation.
+
+The ``BigramCollocationFinder`` and ``TrigramCollocationFinder`` classes provide
+these functionalities, dependent on being provided a function which scores a
+ngram given appropriate frequency counts. A number of standard association
+measures are provided in bigram_measures and trigram_measures.
+"""
+from __future__ import print_function
+
+# Possible TODOs:
+# - consider the distinction between f(x,_) and f(x) and whether our
+#   approximation is good enough for fragmented data, and mention it
+# - add a n-gram collocation finder with measures which only utilise n-gram
+#   and unigram counts (raw_freq, pmi, student_t)
+
+import itertools as _itertools
+from six import iteritems
+
+from nltk.probability import FreqDist
+from nltk.util import ngrams
+from nltk.metrics import ContingencyMeasures, BigramAssocMeasures, TrigramAssocMeasures
+from nltk.metrics.spearman import ranks_from_scores, spearman_correlation
+
+
+class AbstractCollocationFinder(object):
+    """
+    An abstract base class for collocation finders whose purpose is to
+    collect collocation candidate frequencies, filter and rank them.
+
+    As a minimum, collocation finders require the frequencies of each
+    word in a corpus, and the joint frequency of word tuples. This data
+    should be provided through nltk.probability.FreqDist objects or an
+    identical interface.
+    """
+
+    def __init__(self, word_fd, ngram_fd):
+        self.word_fd = word_fd
+        self.N = word_fd.N()
+        self.ngram_fd = ngram_fd
+
+    @classmethod
+    def _build_new_documents(cls, documents, window_size, pad_left=False, pad_right=False, pad_symbol=None):
+        '''
+        Pad the document with the place holder according to the window_size
+        '''
+        padding = (pad_symbol,) * (window_size - 1)
+        if pad_right:
+            return _itertools.chain.from_iterable(_itertools.chain(doc, padding) for doc in documents)
+        if pad_left:
+            return _itertools.chain.from_iterable(_itertools.chain(padding, doc) for doc in documents)
+
+    @classmethod
+    def from_documents(cls, documents):
+        """Constructs a collocation finder given a collection of documents,
+        each of which is a list (or iterable) of tokens.
+        """
+        #return cls.from_words(_itertools.chain(*documents))
+        return cls.from_words(cls._build_new_documents(documents, cls.default_ws, pad_right=True))
+
+    @staticmethod
+    def _ngram_freqdist(words, n):
+        return FreqDist(tuple(words[i:i + n]) for i in range(len(words) - 1))
+
+    def _apply_filter(self, fn=lambda ngram, freq: False):
+        """Generic filter removes ngrams from the frequency distribution
+        if the function returns True when passed an ngram tuple.
+        """
+        tmp_ngram = FreqDist()
+        for ngram, freq in iteritems(self.ngram_fd):
+            if not fn(ngram, freq):
+                tmp_ngram[ngram] = freq
+        self.ngram_fd = tmp_ngram
+
+    def apply_freq_filter(self, min_freq):
+        """Removes candidate ngrams which have frequency less than min_freq."""
+        self._apply_filter(lambda ng, freq: freq < min_freq)
+
+    def apply_ngram_filter(self, fn):
+        """Removes candidate ngrams (w1, w2, ...) where fn(w1, w2, ...)
+        evaluates to True.
+        """
+        self._apply_filter(lambda ng, f: fn(*ng))
+
+    def apply_word_filter(self, fn):
+        """Removes candidate ngrams (w1, w2, ...) where any of (fn(w1), fn(w2),
+        ...) evaluates to True.
+        """
+        self._apply_filter(lambda ng, f: any(fn(w) for w in ng))
+
+    def _score_ngrams(self, score_fn):
+        """Generates of (ngram, score) pairs as determined by the scoring
+        function provided.
+        """
+        for tup in self.ngram_fd:
+            score = self.score_ngram(score_fn, *tup)
+            if score is not None:
+                yield tup, score
+
+    def score_ngrams(self, score_fn):
+        """Returns a sequence of (ngram, score) pairs ordered from highest to
+        lowest score, as determined by the scoring function provided.
+        """
+        return sorted(self._score_ngrams(score_fn), key=lambda t: (-t[1], t[0]))
+
+    def nbest(self, score_fn, n):
+        """Returns the top n ngrams when scored by the given function."""
+        return [p for p, s in self.score_ngrams(score_fn)[:n]]
+
+    def above_score(self, score_fn, min_score):
+        """Returns a sequence of ngrams, ordered by decreasing score, whose
+        scores each exceed the given minimum score.
+        """
+        for ngram, score in self.score_ngrams(score_fn):
+            if score > min_score:
+                yield ngram
+            else:
+                break
+
+
+class BigramCollocationFinder(AbstractCollocationFinder):
+    """A tool for the finding and ranking of bigram collocations or other
+    association measures. It is often useful to use from_words() rather than
+    constructing an instance directly.
+    """
+    default_ws = 2
+
+    def __init__(self, word_fd, bigram_fd, window_size=2):
+        """Construct a BigramCollocationFinder, given FreqDists for
+        appearances of words and (possibly non-contiguous) bigrams.
+        """
+        AbstractCollocationFinder.__init__(self, word_fd, bigram_fd)
+        self.window_size = window_size
+
+    @classmethod
+    def from_words(cls, words, window_size=2):
+        """Construct a BigramCollocationFinder for all bigrams in the given
+        sequence.  When window_size > 2, count non-contiguous bigrams, in the
+        style of Church and Hanks's (1990) association ratio.
+        """
+        wfd = FreqDist()
+        bfd = FreqDist()
+
+        if window_size < 2:
+            raise ValueError("Specify window_size at least 2")
+
+        for window in ngrams(words, window_size, pad_right=True):
+            w1 = window[0]
+            if w1 is None:
+                continue
+            wfd[w1] += 1
+            for w2 in window[1:]:
+                if w2 is not None:
+                    bfd[(w1, w2)] += 1
+        return cls(wfd, bfd, window_size=window_size)
+
+    def score_ngram(self, score_fn, w1, w2):
+        """Returns the score for a given bigram using the given scoring
+        function.  Following Church and Hanks (1990), counts are scaled by
+        a factor of 1/(window_size - 1).
+        """
+        n_all = self.N
+        n_ii = self.ngram_fd[(w1, w2)] / (self.window_size - 1.0)
+        if not n_ii:
+            return
+        n_ix = self.word_fd[w1]
+        n_xi = self.word_fd[w2]
+        return score_fn(n_ii, (n_ix, n_xi), n_all)
+
+
+class TrigramCollocationFinder(AbstractCollocationFinder):
+    """A tool for the finding and ranking of trigram collocations or other
+    association measures. It is often useful to use from_words() rather than
+    constructing an instance directly.
+    """
+    default_ws = 3
+
+    def __init__(self, word_fd, bigram_fd, wildcard_fd, trigram_fd):
+        """Construct a TrigramCollocationFinder, given FreqDists for
+        appearances of words, bigrams, two words with any word between them,
+        and trigrams.
+        """
+        AbstractCollocationFinder.__init__(self, word_fd, trigram_fd)
+        self.wildcard_fd = wildcard_fd
+        self.bigram_fd = bigram_fd
+
+    @classmethod
+    def from_words(cls, words, window_size=3):
+        """Construct a TrigramCollocationFinder for all trigrams in the given
+        sequence.
+        """
+        if window_size < 3:
+            raise ValueError("Specify window_size at least 3")
+
+        wfd = FreqDist()
+        wildfd = FreqDist()
+        bfd = FreqDist()
+        tfd = FreqDist()
+        for window in ngrams(words, window_size, pad_right=True):
+            w1 = window[0]
+            if w1 is None:
+                continue
+            for w2, w3 in _itertools.combinations(window[1:], 2):
+                wfd[w1] += 1
+                if w2 is None:
